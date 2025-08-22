@@ -10,26 +10,31 @@ import requests
 from streamlit_folium import st_folium
 import math
 
+# ────────────────────────────── 
+# ✅ 환경변수 불러오기 (Streamlit Cloud 호환에 저장된 키 사용)
+# ──────────────────────────────
+MAPBOX_TOKEN = "pk.eyJ1IjoiZ3VyMDUxMDgiLCJhIjoiY21lZ2k1Y291MTdoZjJrb2k3bHc3cTJrbSJ9.DElgSQ0rPoRk1eEacPI8uQ"
+
 # ──────────────────────────────
 # ✅ 데이터 로드
 # ──────────────────────────────
 @st.cache_data
 def load_data():
     try:
+        # 정류장 데이터
         stops = gpd.read_file("./new_drt.shp").to_crs(epsg=4326)
         stops["lon"], stops["lat"] = stops.geometry.x, stops.geometry.y
 
+        # 노선 데이터 (drt_1 ~ drt_4)
         bus_data = {}
         for i in range(1, 5):
-            bus_data[f"drt_1"] = gpd.read_file(f"./drt_1.shp").to_crs(epsg=4326),
-            bus_data[f"drt_2"] = gpd.read_file(f"./drt_2.shp").to_crs(epsg=4326),
-            bus_data[f"drt_3"] = gpd.read_file(f"./drt_3.shp").to_crs(epsg=4326),
-            bus_data[f"drt_4"] = gpd.read_file(f"./drt_4.shp").to_crs(epsg=4326)
+            bus_data[f"drt_{i}"] = gpd.read_file(f"./drt_{i}.shp").to_crs(epsg=4326)
 
         return stops, bus_data
     except Exception as e:
         st.error(f"❌ 데이터 로드 실패: {str(e)}")
         return None, None
+
 
 st.set_page_config(
     page_title="천안 DRT 최적 노선",
