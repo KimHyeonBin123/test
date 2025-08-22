@@ -18,7 +18,7 @@ stops["name"] = stops["bus_stops"].astype(str)
 # ------------------------------
 # [좌/중 columns 설정]
 # ------------------------------
-col1, col2 = st.columns([2, 2], gap="large")
+col1, col2 = st.columns([2.5, 3], gap="large")  # col2를 넓혀 노선표 공간 확보
 
 # ------------------------------
 # [좌] 승객 입력
@@ -70,7 +70,7 @@ with col2:
                 "비고": f"{p['name']} 하차"
             })
         df = pd.DataFrame(order_list)
-        st.dataframe(df, use_container_width=True, height=400)  # 높이 지정
+        st.dataframe(df, use_container_width=True, height=700)  # 충분히 큰 높이로 한눈에 표시
     else:
         st.info("승객을 등록하세요.")
 
