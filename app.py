@@ -28,6 +28,7 @@ def load_data():
         # 정류장 데이터
         stops = gpd.read_file("./new_drt.shp").to_crs(epsg=4326)
         stops["lon"], stops["lat"] = stops.geometry.x, stops.geometry.y
+        stops["name"] = stops["bus_stops"].astype(str)
 
         # 노선 데이터 (drt_1 ~ drt_4)
         bus_data = {}
@@ -66,8 +67,8 @@ col1, col2, col3 = st.columns([1.3, 1.2, 3], gap="large")
 # ------------------------------
 with col1:
     st.markdown("### 🚗 추천경로 설정")
-    start = st.selectbox("출발 정류장", stops["bis_stops"].unique())
-    end = st.selectbox("도착 정류장", stops["bis_stops"].unique())
+    start = st.selectbox("출발 정류장", stops["name"].unique())
+    end = st.selectbox("도착 정류장", stops["name"].unique())
     time = st.time_input("승차 시간", value=pd.to_datetime("07:30").time())
     
     col_btn1, col_btn2 = st.columns(2)
