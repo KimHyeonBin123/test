@@ -49,7 +49,7 @@ with col1:
         st.session_state["passengers"] = []
 
 # ------------------------------
-# [중] 노선표 출력
+# [중] 노선표 출력 (좌표 소숫점 2자리)
 # ------------------------------
 with col2:
     st.markdown("### 📍 버스 노선표")
@@ -57,16 +57,22 @@ with col2:
     if st.session_state["passengers"]:
         order_list = []
         for i, p in enumerate(st.session_state["passengers"], 1):
+            start_stop = stops[stops["name"] == p["start"]].iloc[0]
+            end_stop = stops[stops["name"] == p["end"]].iloc[0]
             order_list.append({
                 "순서": i*2-1,
                 "예상시간": p["time"].strftime("%H:%M"),
                 "정류장": p["start"],
+                "위도": round(start_stop.lat, 2),
+                "경도": round(start_stop.lon, 2),
                 "비고": f"{p['name']} 탑승"
             })
             order_list.append({
                 "순서": i*2,
                 "예상시간": "",  
                 "정류장": p["end"],
+                "위도": round(end_stop.lat, 2),
+                "경도": round(end_stop.lon, 2),
                 "비고": f"{p['name']} 하차"
             })
         df = pd.DataFrame(order_list)
@@ -81,12 +87,15 @@ st.markdown("### 🗺️ 경로 시각화")
 clat, clon = stops["lat"].mean(), stops["lon"].mean()
 m = folium.Map(location=[clat, clon], zoom_start=13, tiles="CartoDB Positron")
 
-# 정류장 마커
+# 정류장 마커 (좌표 소숫점 2자리)
 for _, row in stops.iterrows():
-    folium.Marker([row.lat, row.lon],
-                  popup=row["name"],
-                  tooltip=row["name"],
-                  icon=folium.Icon(color="blue", icon="bus", prefix="fa")
+    lat_rounded = round(row.lat, 2)
+    lon_rounded = round(row.lon, 2)
+    folium.Marker(
+        [lat_rounded, lon_rounded],
+        popup=f"{row['name']} ({lat_rounded}, {lon_rounded})",
+        tooltip=f"{row['name']} ({lat_rounded}, {lon_rounded})",
+        icon=folium.Icon(color="blue", icon="bus", prefix="fa")
     ).add_to(m)
 
 # 탑승객 경로 PolyLine
@@ -94,10 +103,11 @@ if st.session_state["passengers"]:
     for p in st.session_state["passengers"]:
         p1 = stops[stops["name"] == p["start"]].geometry.iloc[0]
         p2 = stops[stops["name"] == p["end"]].geometry.iloc[0]
-        coords = [(p1.y, p1.x), (p2.y, p2.x)]
+        coords = [(round(p1.y, 2), round(p1.x, 2)), (round(p2.y, 2), round(p2.x, 2))]
         folium.PolyLine(coords, color="blue", weight=4).add_to(m)
-        folium.Marker((p1.y, p1.x), icon=folium.Icon(color="green", icon="play")).add_to(m)
-        folium.Marker((p2.y, p2.x), icon=folium.Icon(color="red", icon="stop")).add_to(m)
+        folium.Marker((round(p1.y, 2), round(p1.x, 2)), icon=folium.Icon(color="green", icon="play")).add_to(m)
+        folium.Marker((round(p2.y, 2), round(p2.x, 2)), icon=folium.Icon(color="red", icon="stop")).add_to(m)
 
 # 지도 출력 (전체 폭)
 st_folium(m, width=1200, height=900)
+
