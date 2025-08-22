@@ -70,7 +70,7 @@ with col2:
                 "비고": f"{p['name']} 하차"
             })
         df = pd.DataFrame(order_list)
-        st.dataframe(df, use_container_width=True, height=700)  # 충분히 큰 높이로 한눈에 표시
+        st.dataframe(df.style.set_properties(**{'white-space': 'pre'}), use_container_width=True, height=700)
     else:
         st.info("승객을 등록하세요.")
 
