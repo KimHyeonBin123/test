@@ -5,7 +5,6 @@ import streamlit as st
 import geopandas as gpd
 import pandas as pd
 import folium
-from folium.plugins import MarkerCluster
 from shapely.geometry import Point
 from streamlit_folium import st_folium
 
@@ -14,14 +13,12 @@ from streamlit_folium import st_folium
 # ------------------------------
 stops = gpd.read_file("./new_drt.shp").to_crs(epsg=4326)
 stops["lon"], stops["lat"] = stops.geometry.x, stops.geometry.y
-
-# bus_stops 컬럼을 문자열로 변환하여 name 컬럼 생성
 stops["name"] = stops["bus_stops"].astype(str)
 
 # ------------------------------
-# [컬럼 레이아웃 설정]
+# [좌/중 columns 설정]
 # ------------------------------
-col1, col2, col3 = st.columns([1.3, 1.2, 3], gap="large")
+col1, col2 = st.columns([2, 2], gap="large")
 
 # ------------------------------
 # [좌] 승객 입력
@@ -52,7 +49,7 @@ with col1:
         st.session_state["passengers"] = []
 
 # ------------------------------
-# [중간] 노선표 출력
+# [중] 노선표 출력
 # ------------------------------
 with col2:
     st.markdown("### 📍 버스 노선표")
@@ -78,30 +75,29 @@ with col2:
         st.info("승객을 등록하세요.")
 
 # ------------------------------
-# [우] 지도 시각화
+# [지도 - 전체 폭으로 표시]
 # ------------------------------
-with col3:
-    st.markdown("### 🗺️ 경로 시각화")
-    clat, clon = stops["lat"].mean(), stops["lon"].mean()
-    m = folium.Map(location=[clat, clon], zoom_start=13, tiles="CartoDB Positron")
+st.markdown("### 🗺️ 경로 시각화")
+clat, clon = stops["lat"].mean(), stops["lon"].mean()
+m = folium.Map(location=[clat, clon], zoom_start=13, tiles="CartoDB Positron")
 
-    # 정류장 마커 표시
-    for _, row in stops.iterrows():
-        folium.Marker([row.lat, row.lon],
-                      popup=row["name"],
-                      tooltip=row["name"],
-                      icon=folium.Icon(color="blue", icon="bus", prefix="fa")
-        ).add_to(m)
+# 정류장 마커
+for _, row in stops.iterrows():
+    folium.Marker([row.lat, row.lon],
+                  popup=row["name"],
+                  tooltip=row["name"],
+                  icon=folium.Icon(color="blue", icon="bus", prefix="fa")
+    ).add_to(m)
 
-    # 탑승객 경로 PolyLine
-    if st.session_state["passengers"]:
-        for p in st.session_state["passengers"]:
-            p1 = stops[stops["name"] == p["start"]].geometry.iloc[0]
-            p2 = stops[stops["name"] == p["end"]].geometry.iloc[0]
-            coords = [(p1.y, p1.x), (p2.y, p2.x)]
-            folium.PolyLine(coords, color="blue", weight=4).add_to(m)
-            folium.Marker((p1.y, p1.x), icon=folium.Icon(color="green", icon="play")).add_to(m)
-            folium.Marker((p2.y, p2.x), icon=folium.Icon(color="red", icon="stop")).add_to(m)
+# 탑승객 경로 PolyLine
+if st.session_state["passengers"]:
+    for p in st.session_state["passengers"]:
+        p1 = stops[stops["name"] == p["start"]].geometry.iloc[0]
+        p2 = stops[stops["name"] == p["end"]].geometry.iloc[0]
+        coords = [(p1.y, p1.x), (p2.y, p2.x)]
+        folium.PolyLine(coords, color="blue", weight=4).add_to(m)
+        folium.Marker((p1.y, p1.x), icon=folium.Icon(color="green", icon="play")).add_to(m)
+        folium.Marker((p2.y, p2.x), icon=folium.Icon(color="red", icon="stop")).add_to(m)
 
-    st_folium(m, width="100%", height=1500)
-
+# 지도 출력 (전체 폭)
+st_folium(m, width=1200, height=900)
