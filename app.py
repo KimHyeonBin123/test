@@ -7,15 +7,11 @@ import geopandas as gpd
 import pandas as pd
 import folium
 from folium.plugins import MarkerCluster
-from folium.features import DivIcon
 from shapely.geometry import Point
-import osmnx as ox
-import requests
 from streamlit_folium import st_folium
-import math
 
 # ────────────────────────────── 
-# ✅ 환경변수 불러오기 (Streamlit Cloud 호환에 저장된 키 사용)
+# ✅ 환경변수 불러오기 (Streamlit Cloud 호환)
 # ──────────────────────────────
 MAPBOX_TOKEN = "pk.eyJ1IjoiZ3VyMDUxMDgiLCJhIjoiY21lZ2k1Y291MTdoZjJrb2k3bHc3cTJrbSJ9.DElgSQ0rPoRk1eEacPI8uQ"
 
@@ -41,6 +37,33 @@ def load_data():
         return None, None
 
 
+# ──────────────────────────────
+# ✅ 경로 최적화 (중심점 기반 간단 알고리즘)
+# ──────────────────────────────
+def optimize_route(selected, stops_gdf, fix_start_end=False):
+    selected_points = stops_gdf[stops_gdf["name"].isin(selected)].copy()
+
+    if selected_points.empty:
+        return []
+
+    if fix_start_end and len(selected) >= 2:
+        start_name = selected[0]
+        end_name = selected[-1]
+        middle = selected_points[selected_points["name"].isin(selected[1:-1])]
+        center = Point(middle["lon"].mean(), middle["lat"].mean())
+        middle["dist"] = middle.geometry.distance(center)
+        ordered = [start_name] + middle.sort_values("dist")["name"].tolist() + [end_name]
+    else:
+        center = Point(selected_points["lon"].mean(), selected_points["lat"].mean())
+        selected_points["dist"] = selected_points.geometry.distance(center)
+        ordered = selected_points.sort_values("dist")["name"].tolist()
+
+    return ordered
+
+
+# ──────────────────────────────
+# ✅ Streamlit 설정
+# ──────────────────────────────
 st.set_page_config(
     page_title="천안 DRT 최적 노선",
     layout="wide",
@@ -63,14 +86,14 @@ if stops is None:
 col1, col2, col3 = st.columns([1.3, 1.2, 3], gap="large")
 
 # ------------------------------
-# [좌] 출발/도착 선택
+# [좌] 정류장 선택 및 경로 생성
 # ------------------------------
 with col1:
     st.markdown("### 🚗 추천경로 설정")
-    start = st.selectbox("출발 정류장", stops["name"].unique())
-    end = st.selectbox("도착 정류장", stops["name"].unique())
+    selected_stops = st.multiselect("경유할 정류장 선택", stops["name"].unique())
+    fix_start_end = st.checkbox("출발/도착 고정 (첫 번째: 출발, 마지막: 도착)")
     time = st.time_input("승차 시간", value=pd.to_datetime("07:30").time())
-    
+
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         create_clicked = st.button("경로 생성")
@@ -103,11 +126,9 @@ with col2:
 # ------------------------------
 with col3:
     st.markdown("### 🗺️ 추천경로 지도시각화")
-
     clat, clon = stops["lat"].mean(), stops["lon"].mean()
     m = folium.Map(location=[clat, clon], zoom_start=13, tiles="CartoDB Positron")
 
-    # 모든 정류장 표시
     mc = MarkerCluster().add_to(m)
     for _, row in stops.iterrows():
         folium.Marker([row.lat, row.lon],
@@ -116,30 +137,36 @@ with col3:
                       icon=folium.Icon(color="blue", icon="bus", prefix="fa")
         ).add_to(mc)
 
-    # 경로 생성 시각화
     if create_clicked:
-        try:
-            order = [start, end]
-            st.session_state["order"] = order
-            st.session_state["duration"] = 12.3   # 예시값
-            st.session_state["distance"] = 5.8    # 예시값
+        if len(selected_stops) < 2:
+            st.error("⚠️ 최소 2개 이상의 정류장을 선택하세요.")
+        else:
+            try:
+                order = optimize_route(selected_stops, stops, fix_start_end)
+                st.session_state["order"] = order
 
-            # 출발지/도착지 강조
-            srow = stops[stops["name"] == start].iloc[0]
-            erow = stops[stops["name"] == end].iloc[0]
-            folium.Marker([srow.lat, srow.lon], icon=folium.Icon(color="green", icon="play")).add_to(m)
-            folium.Marker([erow.lat, erow.lon], icon=folium.Icon(color="red", icon="stop")).add_to(m)
+                # 거리 및 소요시간 계산
+                total_distance = 0
+                for i in range(len(order)-1):
+                    p1 = stops[stops["name"] == order[i]].geometry.iloc[0]
+                    p2 = stops[stops["name"] == order[i+1]].geometry.iloc[0]
+                    total_distance += p1.distance(p2) * 111  # 위도/경도 -> km
 
-            # 버스별 샘플 노선 표시 (drt_1.shp ~ drt_4.shp)
-            colors = ["#4285f4", "#ea4335", "#34a853", "#fbbc04"]
-            for i, (bus, gdf) in enumerate(bus_data.items()):
-                if not gdf.empty:
-                    folium.PolyLine([(y, x) for x, y in gdf.geometry.iloc[0].coords],
-                                    color=colors[i], weight=5, opacity=0.7,
-                                    tooltip=f"{bus} 노선").add_to(m)
+                st.session_state["distance"] = total_distance
+                st.session_state["duration"] = total_distance / 30 * 60  # 평균속도 30km/h 가정
 
-            st.success("✅ 경로가 생성되었습니다!")
-        except Exception as e:
-            st.error(f"경로 생성 오류: {str(e)}")
+                # 지도에 경로 PolyLine
+                route_coords = []
+                for name in order:
+                    row = stops[stops["name"] == name].iloc[0]
+                    route_coords.append((row.lat, row.lon))
+
+                folium.PolyLine(route_coords, color="blue", weight=5).add_to(m)
+                folium.Marker(route_coords[0], icon=folium.Icon(color="green", icon="play")).add_to(m)
+                folium.Marker(route_coords[-1], icon=folium.Icon(color="red", icon="stop")).add_to(m)
+
+                st.success("✅ 최적 경로가 생성되었습니다!")
+            except Exception as e:
+                st.error(f"경로 생성 오류: {str(e)}")
 
     st_folium(m, width="100%", height=520)
