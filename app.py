@@ -65,12 +65,12 @@ with col2:
             })
             order_list.append({
                 "순서": i*2,
-                "예상시간": "",  # 하차시간은 경로 계산시 채울 수 있음
+                "예상시간": "",  
                 "정류장": p["end"],
                 "비고": f"{p['name']} 하차"
             })
         df = pd.DataFrame(order_list)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, use_container_width=True, height=400)  # 높이 지정
     else:
         st.info("승객을 등록하세요.")
 
