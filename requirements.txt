@@ -1,0 +1,17 @@
+streamlit
+geopandas
+shapely
+fiona
+pyproj
+gdal
+folium
+osmnx
+requests
+streamlit-folium
+openai
+geopy
+pandas
+python-dotenv 
+numpy
+scikit-learn>=1.3 
+
