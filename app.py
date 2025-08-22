@@ -12,7 +12,7 @@ from streamlit_folium import st_folium
 # ──────────────────────────────
 # 설정 (토큰은 Streamlit Secrets에 두는 걸 권장)
 # ──────────────────────────────
-MAPBOX_TOKEN = st.secrets.get("MAPBOX_TOKEN", "").strip() or "YOUR_MAPBOX_TOKEN"
+MAPBOX_TOKEN = "pk.eyJ1IjoiZ3VyMDUxMDgiLCJhIjoiY21lZ2k1Y291MTdoZjJrb2k3bHc3cTJrbSJ9.DElgSQ0rPoRk1eEacPI8uQ"
 
 st.set_page_config(page_title="천안 DRT – 경로 최적화", layout="wide")
 
