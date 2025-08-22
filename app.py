@@ -103,5 +103,5 @@ with col3:
             folium.Marker((p1.y, p1.x), icon=folium.Icon(color="green", icon="play")).add_to(m)
             folium.Marker((p2.y, p2.x), icon=folium.Icon(color="red", icon="stop")).add_to(m)
 
-    st_folium(m, width="100%", height=800)
+    st_folium(m, width="100%", height=1500)
 
