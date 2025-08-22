@@ -1,17 +1,22 @@
+# -*- coding: utf-8 -*-
 import sys
-print(sys.executable)
-print(sys.path)
+import os
 import streamlit as st
 import geopandas as gpd
 import pandas as pd
 import folium
 from folium.plugins import MarkerCluster
-from folium.features import DivIcon
 from shapely.geometry import Point
-import osmnx as ox
-import requests
 from streamlit_folium import st_folium
-import math
+
+# ------------------------------
+# [데이터 불러오기 및 전처리]
+# ------------------------------
+stops = gpd.read_file("./new_drt.shp").to_crs(epsg=4326)
+stops["lon"], stops["lat"] = stops.geometry.x, stops.geometry.y
+
+# bus_stops 컬럼을 문자열로 변환하여 name 컬럼 생성
+stops["name"] = stops["bus_stops"].astype(str)
 
 # ------------------------------
 # [컬럼 레이아웃 설정]
@@ -46,7 +51,6 @@ with col1:
     if st.button("초기화"):
         st.session_state["passengers"] = []
 
-
 # ------------------------------
 # [중간] 노선표 출력
 # ------------------------------
@@ -72,7 +76,6 @@ with col2:
         st.dataframe(df, use_container_width=True)
     else:
         st.info("승객을 등록하세요.")
-
 
 # ------------------------------
 # [우] 지도 시각화
@@ -101,3 +104,4 @@ with col3:
             folium.Marker((p2.y, p2.x), icon=folium.Icon(color="red", icon="stop")).add_to(m)
 
     st_folium(m, width="100%", height=520)
+
