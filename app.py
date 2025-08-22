@@ -110,4 +110,3 @@ if st.session_state["passengers"]:
 
 # 지도 출력 (전체 폭)
 st_folium(m, width=1200, height=900)
-
