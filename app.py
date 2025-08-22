@@ -38,30 +38,6 @@ def load_data():
 
 
 # ──────────────────────────────
-# ✅ 경로 최적화 (중심점 기반 간단 알고리즘)
-# ──────────────────────────────
-def optimize_route(selected, stops_gdf, fix_start_end=False):
-    selected_points = stops_gdf[stops_gdf["name"].isin(selected)].copy()
-
-    if selected_points.empty:
-        return []
-
-    if fix_start_end and len(selected) >= 2:
-        start_name = selected[0]
-        end_name = selected[-1]
-        middle = selected_points[selected_points["name"].isin(selected[1:-1])]
-        center = Point(middle["lon"].mean(), middle["lat"].mean())
-        middle["dist"] = middle.geometry.distance(center)
-        ordered = [start_name] + middle.sort_values("dist")["name"].tolist() + [end_name]
-    else:
-        center = Point(selected_points["lon"].mean(), selected_points["lat"].mean())
-        selected_points["dist"] = selected_points.geometry.distance(center)
-        ordered = selected_points.sort_values("dist")["name"].tolist()
-
-    return ordered
-
-
-# ──────────────────────────────
 # ✅ Streamlit 설정
 # ──────────────────────────────
 st.set_page_config(
@@ -86,14 +62,16 @@ if stops is None:
 col1, col2, col3 = st.columns([1.3, 1.2, 3], gap="large")
 
 # ------------------------------
-# [좌] 정류장 선택 및 경로 생성
+# [좌] 출발/도착 선택
 # ------------------------------
 with col1:
     st.markdown("### 🚗 추천경로 설정")
-    selected_stops = st.multiselect("경유할 정류장 선택", stops["name"].unique())
-    fix_start_end = st.checkbox("출발/도착 고정 (첫 번째: 출발, 마지막: 도착)")
+    
+    start = st.selectbox("출발 정류장", stops["name"].unique())
+    end = st.selectbox("도착 정류장", stops["name"].unique())
+    
     time = st.time_input("승차 시간", value=pd.to_datetime("07:30").time())
-
+    
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         create_clicked = st.button("경로 생성")
@@ -129,6 +107,7 @@ with col3:
     clat, clon = stops["lat"].mean(), stops["lon"].mean()
     m = folium.Map(location=[clat, clon], zoom_start=13, tiles="CartoDB Positron")
 
+    # 모든 정류장 표시
     mc = MarkerCluster().add_to(m)
     for _, row in stops.iterrows():
         folium.Marker([row.lat, row.lon],
@@ -137,36 +116,29 @@ with col3:
                       icon=folium.Icon(color="blue", icon="bus", prefix="fa")
         ).add_to(mc)
 
+    # 출발/도착 선택 후 경로 생성
     if create_clicked:
-        if len(selected_stops) < 2:
-            st.error("⚠️ 최소 2개 이상의 정류장을 선택하세요.")
-        else:
-            try:
-                order = optimize_route(selected_stops, stops, fix_start_end)
-                st.session_state["order"] = order
+        try:
+            order = [start, end]
+            st.session_state["order"] = order
 
-                # 거리 및 소요시간 계산
-                total_distance = 0
-                for i in range(len(order)-1):
-                    p1 = stops[stops["name"] == order[i]].geometry.iloc[0]
-                    p2 = stops[stops["name"] == order[i+1]].geometry.iloc[0]
-                    total_distance += p1.distance(p2) * 111  # 위도/경도 -> km
+            # 거리 및 소요시간 계산
+            p1 = stops[stops["name"] == start].geometry.iloc[0]
+            p2 = stops[stops["name"] == end].geometry.iloc[0]
+            total_distance = p1.distance(p2) * 111  # km 변환
+            st.session_state["distance"] = total_distance
+            st.session_state["duration"] = total_distance / 30 * 60  # 평균속도 30km/h
 
-                st.session_state["distance"] = total_distance
-                st.session_state["duration"] = total_distance / 30 * 60  # 평균속도 30km/h 가정
+            # 지도 PolyLine
+            route_coords = [(stops[stops["name"] == n].lat.values[0], stops[stops["name"] == n].lon.values[0]) for n in order]
+            folium.PolyLine(route_coords, color="blue", weight=5).add_to(m)
 
-                # 지도에 경로 PolyLine
-                route_coords = []
-                for name in order:
-                    row = stops[stops["name"] == name].iloc[0]
-                    route_coords.append((row.lat, row.lon))
+            # 출발/도착 강조
+            folium.Marker(route_coords[0], icon=folium.Icon(color="green", icon="play")).add_to(m)
+            folium.Marker(route_coords[-1], icon=folium.Icon(color="red", icon="stop")).add_to(m)
 
-                folium.PolyLine(route_coords, color="blue", weight=5).add_to(m)
-                folium.Marker(route_coords[0], icon=folium.Icon(color="green", icon="play")).add_to(m)
-                folium.Marker(route_coords[-1], icon=folium.Icon(color="red", icon="stop")).add_to(m)
-
-                st.success("✅ 최적 경로가 생성되었습니다!")
-            except Exception as e:
-                st.error(f"경로 생성 오류: {str(e)}")
+            st.success("✅ 경로가 생성되었습니다!")
+        except Exception as e:
+            st.error(f"경로 생성 오류: {str(e)}")
 
     st_folium(m, width="100%", height=520)
