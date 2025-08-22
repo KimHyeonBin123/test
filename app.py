@@ -1,79 +1,83 @@
-import requests
-from datetime import datetime, timedelta
+# ------------------------------
+# [좌] 승객 입력
+# ------------------------------
+with col1:
+    st.markdown("### 🚗 승객 등록")
 
-# ──────────────────────────────
-# ✅ Mapbox Directions API 호출 함수
-# ──────────────────────────────
-def get_route_mapbox(coords, profile="driving"):
-    """
-    coords: [(lon, lat), (lon, lat), ...]
-    profile: "driving", "walking", "cycling"
-    """
-    coords_str = ";".join([f"{lon},{lat}" for lon, lat in coords])
-    url = f"https://api.mapbox.com/directions/v5/mapbox/{profile}/{coords_str}"
-    params = {
-        "geometries": "geojson",
-        "overview": "full",
-        "steps": "true",
-        "access_token": MAPBOX_TOKEN
-    }
-    res = requests.get(url, params=params)
-    if res.status_code != 200:
-        st.error("❌ Mapbox API 호출 실패")
-        return None
-    data = res.json()
-    return data["routes"][0] if data.get("routes") else None
+    if "passengers" not in st.session_state:
+        st.session_state["passengers"] = []
+
+    with st.form("add_passenger"):
+        name = st.text_input("승객 이름")
+        start = st.selectbox("출발 정류장", stops["name"].unique())
+        end = st.selectbox("도착 정류장", stops["name"].unique())
+        board_time = st.time_input("승차 시간", value=pd.to_datetime("07:30").time())
+        submitted = st.form_submit_button("추가하기")
+
+        if submitted and name and start and end:
+            st.session_state["passengers"].append({
+                "name": name,
+                "start": start,
+                "end": end,
+                "time": board_time
+            })
+            st.success(f"✅ {name} 등록 완료!")
+
+    if st.button("초기화"):
+        st.session_state["passengers"] = []
 
 
-# ──────────────────────────────
-# ✅ 노선 생성 함수
-# ──────────────────────────────
-def generate_bus_route(passengers, base_time):
-    """
-    passengers: [
-        {"name": "지훈", "start": "대림타운", "end": "천안북중학교"},
-        {"name": "민지", "start": "대우목화", "end": "상명대"},
-    ]
-    base_time: datetime (첫 승차 시작 시간)
-    """
-    order_table = []
-    cur_time = base_time
+# ------------------------------
+# [중간] 노선표 출력
+# ------------------------------
+with col2:
+    st.markdown("### 📍 버스 노선표")
 
-    # 좌표 가져오기
-    coords = []
-    for p in passengers:
-        s_point = stops[stops["name"] == p["start"]].geometry.iloc[0]
-        e_point = stops[stops["name"] == p["end"]].geometry.iloc[0]
-        coords.append((s_point.x, s_point.y))  # 출발
-        coords.append((e_point.x, e_point.y))  # 도착
+    if st.session_state["passengers"]:
+        order_list = []
+        for i, p in enumerate(st.session_state["passengers"], 1):
+            order_list.append({
+                "순서": i*2-1,
+                "예상시간": p["time"].strftime("%H:%M"),
+                "정류장": p["start"],
+                "비고": f"{p['name']} 탑승"
+            })
+            order_list.append({
+                "순서": i*2,
+                "예상시간": "",  # 하차시간은 경로 계산시 채울 수 있음
+                "정류장": p["end"],
+                "비고": f"{p['name']} 하차"
+            })
+        df = pd.DataFrame(order_list)
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("승객을 등록하세요.")
 
-    # Mapbox 경로 요청
-    route = get_route_mapbox(coords)
-    if not route:
-        return None, None
 
-    geometry = route["geometry"]["coordinates"]
-    duration = route["duration"]  # 초 단위
-    distance = route["distance"] / 1000  # km
+# ------------------------------
+# [우] 지도 시각화
+# ------------------------------
+with col3:
+    st.markdown("### 🗺️ 경로 시각화")
+    clat, clon = stops["lat"].mean(), stops["lon"].mean()
+    m = folium.Map(location=[clat, clon], zoom_start=13, tiles="CartoDB Positron")
 
-    # 노선표 구성 (순서대로 시간 계산)
-    total_time = 0
-    for i, (lon, lat) in enumerate(coords):
-        stop_name = stops[(stops["lon"] == lon) & (stops["lat"] == lat)]["name"].iloc[0]
-        arr_time = cur_time + timedelta(minutes=total_time/60)
-        remark = ""
-        for p in passengers:
-            if stop_name == p["start"]:
-                remark = f"{p['name']} 탑승"
-            elif stop_name == p["end"]:
-                remark = f"{p['name']} 하차"
-        order_table.append({
-            "순서": i+1,
-            "예상시간": arr_time.strftime("%H:%M"),
-            "정류장": stop_name,
-            "비고": remark
-        })
-        if i < len(route["legs"]):
-            total_time += route["legs"][i]["duration"]  # 초 단위
+    # 정류장 마커 표시
+    for _, row in stops.iterrows():
+        folium.Marker([row.lat, row.lon],
+                      popup=row["name"],
+                      tooltip=row["name"],
+                      icon=folium.Icon(color="blue", icon="bus", prefix="fa")
+        ).add_to(m)
 
-    return order_table, geometry
+    # 탑승객 경로 PolyLine
+    if st.session_state["passengers"]:
+        for p in st.session_state["passengers"]:
+            p1 = stops[stops["name"] == p["start"]].geometry.iloc[0]
+            p2 = stops[stops["name"] == p["end"]].geometry.iloc[0]
+            coords = [(p1.y, p1.x), (p2.y, p2.x)]
+            folium.PolyLine(coords, color="blue", weight=4).add_to(m)
+            folium.Marker((p1.y, p1.x), icon=folium.Icon(color="green", icon="play")).add_to(m)
+            folium.Marker((p2.y, p2.x), icon=folium.Icon(color="red", icon="stop")).add_to(m)
+
+    st_folium(m, width="100%", height=520)
